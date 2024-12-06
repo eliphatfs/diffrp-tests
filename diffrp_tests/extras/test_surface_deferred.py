@@ -3,6 +3,7 @@ import glob
 import torch
 import trimesh
 import trimesh.creation
+import nvdiffrast.torch as dr
 
 from diffrp import *
 from diffrp_tests.screenshot_testing import ScreenshotTestingCase
@@ -19,6 +20,28 @@ class CameraSpaceVertexNormalMaterial(SurfaceMaterial):
 
 
 class TestSurfaceDeferredRP(ScreenshotTestingCase):
+    
+    @torch.no_grad()
+    def test_highres(self):
+        cam = PerspectiveCamera(h=4096, w=3072)
+        mesh = trimesh.creation.icosphere(radius=0.8)
+        scene = Scene()
+        scene.add_mesh_object(MeshObject(DefaultMaterial(), gpu_f32(mesh.vertices), gpu_i32(mesh.faces)))
+        rp = SurfaceDeferredRenderSession(scene, cam)
+        self.compare('sdrp/highres', rp.false_color_camera_space_normal())
+        
+    @torch.no_grad()
+    def test_highmesh(self):
+        scene = Scene()
+        mesh = trimesh.creation.icosphere(10, radius=0.7)
+        scene.add_mesh_object(MeshObject(DefaultMaterial(), gpu_f32(mesh.vertices), gpu_i32(mesh.faces), normals='smooth'))
+        mesh = trimesh.creation.icosphere(8, radius=0.8)
+        scene.add_mesh_object(MeshObject(DefaultMaterial(), gpu_f32(mesh.vertices), gpu_i32(mesh.faces), normals='smooth'))
+        camera = PerspectiveCamera(h=640, w=640)
+        rp = SurfaceDeferredRenderSession(scene, camera, ctx=dr.RasterizeGLContext())
+        self.compare('sdrp/highmesh', rp.false_color_world_space_normal().rgb)
+        rp = PathTracingSession(scene, camera, PathTracingSessionOptions(ray_depth=2, ray_spp=1, deterministic=True))
+        self.compare('sdrp/highmesh', rp.pbr()[-1]['world_normal'] * 0.5 + 0.5, psnr_threshold=30)
 
     @torch.no_grad()
     def test_cylinder(self):
