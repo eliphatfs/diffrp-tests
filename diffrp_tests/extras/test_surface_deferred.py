@@ -6,6 +6,8 @@ import trimesh.creation
 import nvdiffrast.torch as dr
 
 from diffrp import *
+from diffrp.utils import *
+from diffrp.resources.hdris import newport_loft
 from diffrp_tests.screenshot_testing import ScreenshotTestingCase
 
 
@@ -94,6 +96,14 @@ class TestGLTF(ScreenshotTestingCase):
         self.compare("sdrp/gltf-%s-mask" % name, frame)
         frame = rp.false_color_camera_space_normal()
         self.compare("sdrp/gltf-%s-normal" % name, frame)
+
+    def test_tangent(self):
+        cam = PerspectiveCamera.from_orbit(1024, 1024, 5.0, 0, 0, [0, 0, 0])
+        gltf = load_gltf_scene('data/tangent/NormalTangentTest.glb', compute_tangents=True)
+        gltf.add_light(ImageEnvironmentLight(1.0, gpu_f32([1] * 3), gpu_f32(newport_loft())))
+        rp = SurfaceDeferredRenderSession(gltf, cam, False, options=SurfaceDeferredRenderSessionOptions(max_layers=3))
+        rgb = background_alpha_compose(1, rp.pbr())
+        self.compare('sdrp/gltf-tangent-test', agx_base_contrast(rgb))
 
     @torch.no_grad()
     def test_gltfs(self):
